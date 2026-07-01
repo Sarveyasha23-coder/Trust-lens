@@ -23,13 +23,13 @@ except:
 
 st.set_page_config(
     page_title="Heart Failure Prediction  ",
-    st.caption("Developed by Sarveyasha"),
+   
     page_icon="❤️",
     layout="wide"
 )
 
 st.title("❤️ Heart Failure Prediction")
-
+st.caption("Developed by Sarveyasha")
 st.write(
     "Predict heart disease risk using machine learning."
 )
