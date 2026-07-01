@@ -1,194 +1,185 @@
 import streamlit as st
+import joblib
 import pandas as pd
 import numpy as np
-import joblib
-from PIL import Image
 
-# ------------------------
-# PAGE
-# ------------------------
-
+# -------------------------
+# PAGE CONFIG
+# -------------------------
 st.set_page_config(
-    page_title="TrustLens",
-    page_icon="🛡️",
+    page_title="Heart Failure Prediction",
+    page_icon="❤️",
     layout="wide"
 )
 
-# ------------------------
+# -------------------------
 # LOAD MODEL
-# ------------------------
+# -------------------------
+MODEL_PATH = "heart_failure_best_model.pkl"
 
 @st.cache_resource
 def load_model():
-    return joblib.load("trustlens (2).pkl")
+    return joblib.load(MODEL_PATH)
 
 model = load_model()
 
-# ------------------------
-# STYLE
-# ------------------------
-
-st.markdown("""
-<style>
-
-.big{
-font-size:55px;
-font-weight:800;
-text-align:center;
-}
-
-.sub{
-text-align:center;
-font-size:18px;
-color:gray;
-}
-
-.block{
-padding:25px;
-border-radius:20px;
-background:#111111;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<div class='big'>
-🛡️ TrustLens
-</div>
-
-<div class='sub'>
-AI Deepfake Detection • Built by Sarveyasha Sodhiya
-</div>
-""", unsafe_allow_html=True)
-
-st.write("")
-st.write("Upload image → Analyze → Detect")
-
-# ------------------------
-# IMAGE
-# ------------------------
-
-uploaded=st.file_uploader(
-"Upload Image",
-type=["png","jpg","jpeg"]
+# -------------------------
+# HEADER
+# -------------------------
+st.title("❤️ Heart Failure Prediction")
+st.write(
+    "Predict the probability of heart disease using patient health information."
 )
 
-if uploaded:
+# -------------------------
+# INPUT FORM
+# -------------------------
 
-    image=Image.open(uploaded)
+col1, col2 = st.columns(2)
 
-    st.image(
-        image,
-        use_container_width=True
+with col1:
+
+    Age = st.slider(
+        "Age",
+        18,
+        100,
+        45
     )
 
-    width,height=image.size
-
-    img=np.array(image)
-
-    brightness=float(np.mean(img))
-
-    quality=min(
-        int(brightness/255*100),
-        100
+    Sex = st.selectbox(
+        "Sex",
+        ["M", "F"]
     )
 
-    confidence=round(
-        brightness/255,
-        2
+    ChestPainType = st.selectbox(
+        "Chest Pain Type",
+        ["ATA", "NAP", "ASY", "TA"]
     )
 
-    st.write("Image Resolution:",f"{width}×{height}")
+    RestingBP = st.number_input(
+        "Resting Blood Pressure",
+        80,
+        250,
+        120
+    )
 
-# ------------------------
-# BUTTON
-# ------------------------
+    Cholesterol = st.number_input(
+        "Cholesterol",
+        0,
+        700,
+        200
+    )
 
-if uploaded and st.button("Analyze"):
+    FastingBS = st.selectbox(
+        "Fasting Blood Sugar",
+        [0, 1]
+    )
+
+with col2:
+
+    RestingECG = st.selectbox(
+        "Resting ECG",
+        ["Normal", "ST", "LVH"]
+    )
+
+    MaxHR = st.slider(
+        "Max Heart Rate",
+        60,
+        220,
+        150
+    )
+
+    ExerciseAngina = st.selectbox(
+        "Exercise Angina",
+        ["Y", "N"]
+    )
+
+    Oldpeak = st.slider(
+        "Oldpeak",
+        0.0,
+        6.5,
+        1.0
+    )
+
+    ST_Slope = st.selectbox(
+        "ST Slope",
+        ["Up", "Flat", "Down"]
+    )
+
+# -------------------------
+# CREATE INPUT
+# -------------------------
+
+input_df = pd.DataFrame([{
+    "Age": Age,
+    "Sex": Sex,
+    "ChestPainType": ChestPainType,
+    "RestingBP": RestingBP,
+    "Cholesterol": Cholesterol,
+    "FastingBS": FastingBS,
+    "RestingECG": RestingECG,
+    "MaxHR": MaxHR,
+    "ExerciseAngina": ExerciseAngina,
+    "Oldpeak": Oldpeak,
+    "ST_Slope": ST_Slope
+}])
+
+
+# -------------------------
+# PREDICTION
+# -------------------------
+
+if st.button("Predict"):
 
     try:
 
-        feature_names=list(
-            model.feature_names_in_
+        pred = model.predict(input_df)[0]
+
+        prob = float(
+            model.predict_proba(input_df)[0][1]
         )
 
-        row={}
+        st.divider()
 
-        for col in feature_names:
-
-            if col=="image_quality":
-                row[col]=quality
-
-            elif col=="confidence_score":
-                row[col]=confidence
-
-            elif col=="resolution":
-                row[col]=width
-
-            elif col=="gender":
-                row[col]=0
-
-            elif col=="age_group":
-                row[col]=0
-
-            elif col=="year":
-                row[col]=2026
-
-            elif col=="label_numeric":
-                row[col]=0
-
-            else:
-                row[col]=0
-
-        X=pd.DataFrame([row])
-
-        pred=model.predict(X)[0]
-
-        prob=None
-
-        try:
-            prob=max(
-                model.predict_proba(X)[0]
-            )
-
-        except:
-            prob=.90
-
-        st.write("---")
-
-        if pred==1:
+        if pred == 1:
 
             st.error(
-f"""
-🚨 DEEPFAKE DETECTED
-
-Confidence:
-{prob:.0%}
-"""
-)
+                f"High Risk Detected\n\nProbability: {prob:.2%}"
+            )
 
         else:
 
             st.success(
-f"""
-✅ REAL IMAGE
+                f"Low Risk\n\nProbability: {prob:.2%}"
+            )
 
-Confidence:
-{prob:.0%}
-"""
-)
+        st.subheader("Risk Meter")
 
-        st.write("Features Used")
+        st.progress(prob)
 
-        st.dataframe(X)
+        st.metric(
+            "Heart Disease Probability",
+            f"{prob:.1%}"
+        )
+
+        st.subheader("Entered Values")
+
+        st.dataframe(
+            input_df,
+            use_container_width=True
+        )
 
     except Exception as e:
 
-        st.error(e)
+        st.exception(e)
 
-st.write("---")
+
+# -------------------------
+# FOOTER
+# -------------------------
+
+st.markdown("---")
 
 st.caption(
-"TrustLens • Built by Sarveyasha Sodhiya"
+    "Model: Trained using Heart Failure Prediction Dataset"
 )
