@@ -29,7 +29,17 @@ st.set_page_config(
 )
 
 st.title("❤️ Heart Failure Prediction")
-st.caption("Developed by Sarveyasha")
+st.markdown(
+"""
+<h4 style="
+background:linear-gradient(90deg,#ff0066,#6a00ff);
+-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;">
+Developed by Sarveyasha
+</h4>
+""",
+unsafe_allow_html=True
+)
 st.write(
     "Predict heart disease risk using machine learning."
 )
