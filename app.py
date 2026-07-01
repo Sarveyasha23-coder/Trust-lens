@@ -1,185 +1,287 @@
 import streamlit as st
-import joblib
 import pandas as pd
 import numpy as np
 
+from sklearn.model_selection import train_test_split
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import roc_auc_score
+from sklearn.ensemble import RandomForestClassifier
+
+# Optional XGBoost
+try:
+    from xgboost import XGBClassifier
+    USE_XGB = True
+except:
+    USE_XGB = False
+
+
 # -------------------------
-# PAGE CONFIG
+# PAGE
 # -------------------------
+
 st.set_page_config(
     page_title="Heart Failure Prediction",
     page_icon="❤️",
     layout="wide"
 )
 
-# -------------------------
-# LOAD MODEL
-# -------------------------
-MODEL_PATH = "heart_failure_best_model.pkl"
-
-@st.cache_resource
-def load_model():
-    return joblib.load(MODEL_PATH)
-
-model = load_model()
-
-# -------------------------
-# HEADER
-# -------------------------
 st.title("❤️ Heart Failure Prediction")
+
 st.write(
-    "Predict the probability of heart disease using patient health information."
+    "Predict heart disease risk using machine learning."
 )
 
+
 # -------------------------
-# INPUT FORM
+# LOAD DATA
 # -------------------------
 
-col1, col2 = st.columns(2)
+@st.cache_data
+def load_data():
 
-with col1:
+    # change path if needed
+    df = pd.read_csv("heart.csv")
 
-    Age = st.slider(
+    return df
+
+
+# -------------------------
+# TRAIN MODEL
+# -------------------------
+
+@st.cache_resource
+def train_model():
+
+    df = load_data()
+
+    target = "HeartDisease"
+
+    X = df.drop(columns=[target])
+    y = df[target]
+
+    cat_cols = X.select_dtypes(include="object").columns
+    num_cols = X.select_dtypes(exclude="object").columns
+
+    preprocess = ColumnTransformer(
+        [
+            (
+                "num",
+                StandardScaler(),
+                num_cols
+            ),
+            (
+                "cat",
+                OneHotEncoder(
+                    handle_unknown="ignore"
+                ),
+                cat_cols
+            )
+        ]
+    )
+
+    if USE_XGB:
+
+        model = XGBClassifier(
+            n_estimators=300,
+            learning_rate=0.03,
+            max_depth=5,
+            eval_metric="logloss"
+        )
+
+    else:
+
+        model = RandomForestClassifier(
+            n_estimators=300,
+            random_state=42
+        )
+
+    pipe = Pipeline([
+        ("prep", preprocess),
+        ("model", model)
+    ])
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y
+    )
+
+    pipe.fit(X_train, y_train)
+
+    prob = pipe.predict_proba(X_test)[:, 1]
+
+    score = roc_auc_score(y_test, prob)
+
+    return pipe, score
+
+
+try:
+
+    model, auc = train_model()
+
+    st.success(
+        f"Model ready • ROC-AUC: {auc:.3f}"
+    )
+
+except Exception as e:
+
+    st.error(
+        "Dataset not found."
+    )
+
+    st.code(
+"""
+Put this file beside app.py:
+
+heart.csv
+app.py
+"""
+    )
+
+    st.stop()
+
+
+# -------------------------
+# INPUTS
+# -------------------------
+
+left, right = st.columns(2)
+
+with left:
+
+    age = st.slider(
         "Age",
         18,
         100,
         45
     )
 
-    Sex = st.selectbox(
+    sex = st.selectbox(
         "Sex",
         ["M", "F"]
     )
 
-    ChestPainType = st.selectbox(
+    chest = st.selectbox(
         "Chest Pain Type",
-        ["ATA", "NAP", "ASY", "TA"]
+        [
+            "ATA",
+            "NAP",
+            "ASY",
+            "TA"
+        ]
     )
 
-    RestingBP = st.number_input(
-        "Resting Blood Pressure",
+    bp = st.number_input(
+        "Resting BP",
         80,
         250,
         120
     )
 
-    Cholesterol = st.number_input(
+    chol = st.number_input(
         "Cholesterol",
         0,
         700,
         200
     )
 
-    FastingBS = st.selectbox(
-        "Fasting Blood Sugar",
+    sugar = st.selectbox(
+        "Fasting BS",
         [0, 1]
     )
 
-with col2:
+with right:
 
-    RestingECG = st.selectbox(
+    ecg = st.selectbox(
         "Resting ECG",
-        ["Normal", "ST", "LVH"]
+        [
+            "Normal",
+            "ST",
+            "LVH"
+        ]
     )
 
-    MaxHR = st.slider(
-        "Max Heart Rate",
+    hr = st.slider(
+        "Max HR",
         60,
         220,
         150
     )
 
-    ExerciseAngina = st.selectbox(
+    angina = st.selectbox(
         "Exercise Angina",
-        ["Y", "N"]
+        [
+            "Y",
+            "N"
+        ]
     )
 
-    Oldpeak = st.slider(
+    oldpeak = st.slider(
         "Oldpeak",
         0.0,
         6.5,
         1.0
     )
 
-    ST_Slope = st.selectbox(
+    slope = st.selectbox(
         "ST Slope",
-        ["Up", "Flat", "Down"]
+        [
+            "Up",
+            "Flat",
+            "Down"
+        ]
     )
 
-# -------------------------
-# CREATE INPUT
-# -------------------------
-
-input_df = pd.DataFrame([{
-    "Age": Age,
-    "Sex": Sex,
-    "ChestPainType": ChestPainType,
-    "RestingBP": RestingBP,
-    "Cholesterol": Cholesterol,
-    "FastingBS": FastingBS,
-    "RestingECG": RestingECG,
-    "MaxHR": MaxHR,
-    "ExerciseAngina": ExerciseAngina,
-    "Oldpeak": Oldpeak,
-    "ST_Slope": ST_Slope
-}])
-
 
 # -------------------------
-# PREDICTION
+# PREDICT
 # -------------------------
 
 if st.button("Predict"):
 
-    try:
+    sample = pd.DataFrame([
+        {
+            "Age": age,
+            "Sex": sex,
+            "ChestPainType": chest,
+            "RestingBP": bp,
+            "Cholesterol": chol,
+            "FastingBS": sugar,
+            "RestingECG": ecg,
+            "MaxHR": hr,
+            "ExerciseAngina": angina,
+            "Oldpeak": oldpeak,
+            "ST_Slope": slope
+        }
+    ])
 
-        pred = model.predict(input_df)[0]
+    pred = model.predict(sample)[0]
 
-        prob = float(
-            model.predict_proba(input_df)[0][1]
+    prob = float(
+        model.predict_proba(sample)[0][1]
+    )
+
+    st.divider()
+
+    if pred == 1:
+
+        st.error(
+            f"High Risk ({prob:.1%})"
         )
 
-        st.divider()
+    else:
 
-        if pred == 1:
-
-            st.error(
-                f"High Risk Detected\n\nProbability: {prob:.2%}"
-            )
-
-        else:
-
-            st.success(
-                f"Low Risk\n\nProbability: {prob:.2%}"
-            )
-
-        st.subheader("Risk Meter")
-
-        st.progress(prob)
-
-        st.metric(
-            "Heart Disease Probability",
-            f"{prob:.1%}"
+        st.success(
+            f"Low Risk ({prob:.1%})"
         )
 
-        st.subheader("Entered Values")
+    st.progress(prob)
 
-        st.dataframe(
-            input_df,
-            use_container_width=True
-        )
-
-    except Exception as e:
-
-        st.exception(e)
-
-
-# -------------------------
-# FOOTER
-# -------------------------
-
-st.markdown("---")
-
-st.caption(
-    "Model: Trained using Heart Failure Prediction Dataset"
-)
+    st.dataframe(
+        sample,
+        use_container_width=True
+    )
