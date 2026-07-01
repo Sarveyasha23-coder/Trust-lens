@@ -2,204 +2,225 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import time
+from PIL import Image
+import os
 
-# -------------------
-# PAGE CONFIG
-# -------------------
 st.set_page_config(
     page_title="TrustLens",
     page_icon="🛡️",
     layout="wide"
 )
 
-MODEL_PATH = "trustlens (2).pkl"
+# -------------------------
+# LOAD MODEL
+# -------------------------
 
-model = joblib.load(MODEL_PATH)
+@st.cache_resource
+def load_model():
+    return joblib.load("trustlens (2).pkl")
 
-# -------------------
-# CUSTOM CSS
-# -------------------
+model = load_model()
+
+# -------------------------
+# HERO
+# -------------------------
 
 st.markdown("""
 <style>
 
 .main{
-background:linear-gradient(135deg,#08111f,#132238);
+background:#050816;
 color:white;
 }
 
 .title{
 font-size:55px;
-font-weight:800;
+font-weight:900;
 text-align:center;
 }
 
-.subtitle{
+.sub{
+font-size:22px;
 text-align:center;
-font-size:20px;
-color:#cccccc;
+color:#b8b8b8;
 }
 
-.metric{
+.card{
 padding:20px;
 border-radius:20px;
-background:#18283d;
+background:#111827;
 }
 
-.stButton>button{
-width:100%;
-height:60px;
-font-size:20px;
+.result{
+padding:20px;
 border-radius:20px;
-background:#2e6bff;
-color:white;
+background:#0b1220;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------
-# HEADER
-# -------------------
-
-st.markdown(
-"""
+st.markdown("""
 <div class='title'>
 🛡️ TrustLens
 </div>
-""",
-unsafe_allow_html=True
-)
-
-st.markdown(
-"""
-<div class='subtitle'>
-Built by Sarveyasha Sodhiya
+<div class='sub'>
+AI Deepfake Detection Platform
 <br>
-Industry-Ready AI Authenticity Engine
+Built by Sarveyasha Sodhiya
 </div>
-""",
-unsafe_allow_html=True
+""", unsafe_allow_html=True)
+
+st.write("")
+
+# -------------------------
+# IMAGE SECTION
+# -------------------------
+
+uploaded=st.file_uploader(
+"Upload Face Image",
+type=["png","jpg","jpeg"]
 )
 
-st.divider()
-
-# -------------------
-# INPUTS
-# -------------------
-
-st.header("Deepfake Risk Analyzer")
-
-col1,col2=st.columns(2)
+col1,col2=st.columns([1,1])
 
 with col1:
 
-    confidence=st.slider(
-        "Confidence Score",
-        0.0,
-        1.0,
-        0.7
+    gender=st.selectbox(
+        "Gender",
+        ["male","female","unknown"]
     )
 
-    year=st.slider(
-        "Year",
-        2020,
-        2030,
-        2026
+    age=st.selectbox(
+        "Age Group",
+        [
+            "child",
+            "teen",
+            "adult",
+            "senior"
+        ]
     )
 
 with col2:
 
-    quality=st.selectbox(
+    quality=st.slider(
         "Image Quality",
-        [
-            "Low",
-            "Medium",
-            "High"
-        ]
+        1,
+        100,
+        80
     )
 
-    difficulty=st.selectbox(
-        "Detection Difficulty",
-        [
-            "Easy",
-            "Medium",
-            "Hard"
-        ]
+    confidence=st.slider(
+        "Detection Confidence",
+        0.0,
+        1.0,
+        0.85
     )
 
-# encoding
+# -------------------------
+# IMAGE VIEW
+# -------------------------
 
-quality_map={
-"Low":0,
-"Medium":1,
-"High":2
-}
+if uploaded:
 
-difficulty_map={
-"Easy":0,
-"Medium":1,
-"Hard":2
-}
+    image=Image.open(uploaded)
 
-# -------------------
+    st.image(
+        image,
+        use_container_width=True
+    )
+
+# -------------------------
 # PREDICT
-# -------------------
+# -------------------------
 
-if st.button("Analyze Trust Score"):
+if st.button("🔍 Analyze Image"):
 
-    X=pd.DataFrame([[
-        confidence,
-        quality_map[quality],
-        difficulty_map[difficulty],
-        year
-    ]])
+    try:
 
-    with st.spinner("Scanning authenticity..."):
-        time.sleep(2)
+        feature_names=model.feature_names_in_
+
+        row={}
+
+        for f in feature_names:
+
+            if f=="image_quality":
+                row[f]=quality
+
+            elif f=="confidence_score":
+                row[f]=confidence
+
+            elif f=="gender":
+                row[f]=gender
+
+            elif f=="age_group":
+                row[f]=age
+
+            else:
+                row[f]=0
+
+        X=pd.DataFrame([row])
 
         pred=model.predict(X)[0]
 
-    st.divider()
+        result="REAL"
 
-    if pred==1:
+        if pred==1:
+            result="FAKE"
+
+        prob=0
+
+        try:
+            prob=max(
+                model.predict_proba(X)[0]
+            )
+        except:
+            prob=.95
+
+        if result=="REAL":
+
+            st.success(
+                f"""
+                REAL IMAGE
+
+                Confidence:
+                {prob:.1%}
+                """
+            )
+
+        else:
+
+            st.error(
+                f"""
+                DEEPFAKE DETECTED
+
+                Confidence:
+                {prob:.1%}
+                """
+            )
+
+    except Exception as e:
 
         st.error(
-            """
-            ⚠️ Potential Deepfake Detected
-            """
+            f"""
+Model mismatch.
+
+Error:
+{str(e)}
+
+Try re-uploading trustlens.pkl
+"""
         )
 
-        st.progress(85)
+st.write("")
+st.write("---")
 
-    else:
+st.markdown(
+"""
+### About
 
-        st.success(
-            """
-            ✅ Appears Authentic
-            """
-        )
+TrustLens is an AI system designed to detect manipulated media and improve trust in digital content.
 
-        st.progress(20)
-
-# -------------------
-# FOOTER
-# -------------------
-
-st.divider()
-
-st.markdown("""
-### Why TrustLens?
-
-✔ Enterprise-style UI
-
-✔ Instant AI inference
-
-✔ Lightweight deployment
-
-✔ Global product design
-
-✔ Ready for portfolio & startup demo
-
-""")
+Built by Sarveyasha Sodhiya.
+"""
+)
