@@ -23,7 +23,7 @@ except:
 
 st.set_page_config(
     page_title="Heart Failure Prediction  ",
-     page_title="Developed by Sarveyasha  ",
+    st.caption("Developed by Sarveyasha"),
     page_icon="❤️",
     layout="wide"
 )
